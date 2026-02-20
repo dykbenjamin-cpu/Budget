@@ -1,12 +1,10 @@
 import http from "http";
 import fs from "fs";
 import { URL } from "url";
+import { pbkdf2Sync, randomUUID, timingSafeEqual } from "crypto";
 
 const DATA_FILE = "./data.json";
-
-let income = [];
-let expenses = [];
-let recurringBills = [];
+let dataStore = { accounts: {}, sessions: {}, legacyUsers: {} };
 
 // 14-month cutoff
 const now = new Date();
@@ -15,16 +13,205 @@ const cutoff = new Date(now.getFullYear(), now.getMonth() - 14, now.getDate());
 // Load saved data and apply 14-month filter
 if (fs.existsSync(DATA_FILE)) {
   const saved = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-  income = (saved.income || []).filter(i => new Date(i.date) >= cutoff);
-  expenses = (saved.expenses || []).filter(e => new Date(e.date) >= cutoff);
-  recurringBills = saved.recurringBills || [];
+  if (saved && typeof saved === "object") {
+    if (saved.accounts && typeof saved.accounts === "object") {
+      dataStore.accounts = saved.accounts;
+    }
+    if (saved.sessions && typeof saved.sessions === "object") {
+      dataStore.sessions = saved.sessions;
+    }
+    if (saved.users && typeof saved.users === "object") {
+      dataStore.legacyUsers = saved.users;
+    }
+    if (saved.legacyUsers && typeof saved.legacyUsers === "object") {
+      dataStore.legacyUsers = saved.legacyUsers;
+    }
+  } else {
+    const legacyIncome = (saved.income || []).filter(i => new Date(i.date) >= cutoff);
+    const legacyExpenses = (saved.expenses || []).filter(e => new Date(e.date) >= cutoff);
+    const legacyRecurringBills = saved.recurringBills || [];
+
+    dataStore.legacyUsers = {
+      legacy: {
+        income: legacyIncome,
+        expenses: legacyExpenses,
+        recurringBills: legacyRecurringBills
+      }
+    };
+  }
+}
+
+function parseCookies(cookieHeader) {
+  if (!cookieHeader) return {};
+
+  return cookieHeader
+    .split(";")
+    .map(part => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const eqIndex = part.indexOf("=");
+      if (eqIndex === -1) return acc;
+      const key = part.slice(0, eqIndex).trim();
+      const value = decodeURIComponent(part.slice(eqIndex + 1).trim());
+      if (key) acc[key] = value;
+      return acc;
+    }, {});
+}
+
+function normalizeUsername(raw) {
+  return String(raw || "").trim().toLowerCase();
+}
+
+function hashPassword(password, salt) {
+  return pbkdf2Sync(password, salt, 100000, 64, "sha512").toString("hex");
+}
+
+function verifyPassword(password, salt, expectedHash) {
+  const computedHash = hashPassword(password, salt);
+  const expectedBuffer = Buffer.from(expectedHash, "hex");
+  const actualBuffer = Buffer.from(computedHash, "hex");
+  if (expectedBuffer.length !== actualBuffer.length) return false;
+  return timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+function getSessionContext(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies.budget_session_id;
+  const username = sessionId ? dataStore.sessions[sessionId] : null;
+  let setCookieHeader = null;
+
+  if (sessionId && !username) {
+    setCookieHeader = "budget_session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+  }
+
+  return { sessionId, username, setCookieHeader };
+}
+
+function createSessionCookie(sessionId) {
+  return `budget_session_id=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
+}
+
+function clearSessionCookie() {
+  return "budget_session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+}
+
+function withCookieHeaders(headers, ...cookieHeaders) {
+  const cookies = cookieHeaders.filter(Boolean);
+  if (cookies.length === 0) return headers;
+  return { ...headers, "Set-Cookie": cookies.length === 1 ? cookies[0] : cookies };
+}
+
+function getUserData(username) {
+  if (!dataStore.accounts[username]) {
+    dataStore.accounts[username] = { salt: "", passwordHash: "", income: [], expenses: [], recurringBills: [] };
+  }
+
+  const userData = dataStore.accounts[username];
+  userData.income = (userData.income || []).filter(i => new Date(i.date) >= cutoff);
+  userData.expenses = (userData.expenses || []).filter(e => new Date(e.date) >= cutoff);
+  userData.recurringBills = userData.recurringBills || [];
+
+  return userData;
 }
 
 function saveData() {
-  // Remove any entries older than 14 months before saving
-  income = income.filter(i => new Date(i.date) >= cutoff);
-  expenses = expenses.filter(e => new Date(e.date) >= cutoff);
-  fs.writeFileSync(DATA_FILE, JSON.stringify({ income, expenses, recurringBills }, null, 2));
+  for (const username of Object.keys(dataStore.accounts)) {
+    const userData = getUserData(username);
+    dataStore.accounts[username] = userData;
+  }
+  fs.writeFileSync(DATA_FILE, JSON.stringify(dataStore, null, 2));
+}
+
+function renderAuthPage(errorMessage = "") {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Login</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+      .wrap {
+        width: 100%;
+        max-width: 900px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } }
+      .card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+        padding: 24px;
+      }
+      h1 { margin-bottom: 8px; color: #333; }
+      p { color: #666; margin-bottom: 18px; font-size: 14px; }
+      .error {
+        background: #ffe9ee;
+        color: #b42344;
+        border: 1px solid #ffc9d5;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      label { display: block; font-size: 12px; color: #666; margin-bottom: 6px; text-transform: uppercase; }
+      input {
+        width: 100%;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 11px;
+        margin-bottom: 12px;
+      }
+      button {
+        width: 100%;
+        border: none;
+        border-radius: 8px;
+        padding: 12px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Welcome</h1>
+        <p>Create a simple account to keep your budget private across devices.</p>
+        ${errorMessage ? `<div class="error">${errorMessage}</div>` : ""}
+        <form method="POST" action="/login">
+          <label>Username</label>
+          <input name="username" required minlength="3" maxlength="32" />
+          <label>Password</label>
+          <input name="password" type="password" required minlength="6" maxlength="128" />
+          <button>Sign In</button>
+        </form>
+      </div>
+      <div class="card">
+        <h1>Create Account</h1>
+        <p>Minimal setup: just username + password.</p>
+        <form method="POST" action="/register">
+          <label>Username</label>
+          <input name="username" required minlength="3" maxlength="32" />
+          <label>Password</label>
+          <input name="password" type="password" required minlength="6" maxlength="128" />
+          <button>Create Account</button>
+        </form>
+      </div>
+    </div>
+  </body>
+  </html>`;
 }
 
 function withinLast14Months(dateStr) {
@@ -41,9 +228,9 @@ function totalsByCategory(entries, recurring=false) {
   return totals;
 }
 
-function totals() {
-  const recentIncome = income.filter(i => withinLast14Months(i.date));
-  const recentExpenses = expenses.filter(e => withinLast14Months(e.date));
+function totals(userData) {
+  const recentIncome = userData.income.filter(i => withinLast14Months(i.date));
+  const recentExpenses = userData.expenses.filter(e => withinLast14Months(e.date));
 
   const incomeTotal = recentIncome.reduce((s, i) => s + i.amount, 0);
   const expenseTotal = recentExpenses.reduce((s, e) => s + e.amount, 0);
@@ -57,8 +244,9 @@ function totals() {
   };
 }
 
-function applyRecurringBills() {
+function applyRecurringBills(userData) {
   const today = new Date();
+  const recurringBills = userData.recurringBills;
 
   recurringBills.forEach(bill => {
     const lastPaidDate = bill.lastPaid ? new Date(bill.lastPaid) : null;
@@ -88,19 +276,35 @@ function applyRecurringBills() {
 }
 
 const server = http.createServer((req, res) => {
+  const { sessionId, username, setCookieHeader } = getSessionContext(req);
+  const userData = username ? getUserData(username) : null;
+  const income = userData ? userData.income : [];
+  const expenses = userData ? userData.expenses : [];
+  const recurringBills = userData ? userData.recurringBills : [];
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (req.method === "GET" && url.pathname === "/") {
-    applyRecurringBills();
+  function redirect(path = '/', ...extraCookies) {
+    res.writeHead(302, withCookieHeaders({ Location: path }, setCookieHeader, ...extraCookies));
+    res.end();
+  }
 
-    const t = totals();
+  if (req.method === "GET" && url.pathname === "/") {
+    if (!userData) {
+      res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
+      res.end(renderAuthPage());
+      return;
+    }
+
+    applyRecurringBills(userData);
+
+    const t = totals(userData);
     const incomeLabels = Object.keys(t.incomeByCategory);
     const incomeData = Object.values(t.incomeByCategory);
     const expenseLabels = Object.keys(t.expenseByCategory);
     const expenseData = Object.values(t.expenseByCategory);
     const expenseColors = Object.keys(t.expenseByCategory).map(label => label.includes('(Recurring)') ? 'rgba(255, 159, 64, 0.7)' : 'rgba(255, 99, 132, 0.7)');
 
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
     res.end(`
       <!DOCTYPE html>
       <html lang="en">
@@ -397,7 +601,11 @@ const server = http.createServer((req, res) => {
         <div class="container">
           <div class="header">
             <h1>💰 Budget Dashboard</h1>
-            <div class="date-display">Last 14 Months | Today: ${new Date().toISOString().slice(0,10)}</div>
+            <div class="date-display">Signed in as: ${username} • Last 14 Months | Today: ${new Date().toISOString().slice(0,10)}</div>
+            <form method="POST" action="/logout" style="margin-bottom: 20px;">
+              <button type="submit" style="max-width: 180px;">Sign Out</button>
+            </form>
+            
             <div class="summary-grid">
               <div class="summary-card income">
                 <div class="summary-label">Total Income</div>
@@ -604,13 +812,86 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST') {
+    if (url.pathname === '/register') {
+      parseBody(req, p => {
+        const usernameInput = normalizeUsername(p.get('username'));
+        const password = String(p.get('password') || '');
+
+        if (!/^[a-z0-9_\-.]{3,32}$/.test(usernameInput)) {
+          res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
+          res.end(renderAuthPage('Username must be 3-32 chars: letters, numbers, _, -, .'));
+          return;
+        }
+        if (password.length < 6 || password.length > 128) {
+          res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
+          res.end(renderAuthPage('Password must be between 6 and 128 characters.'));
+          return;
+        }
+        if (dataStore.accounts[usernameInput]) {
+          res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
+          res.end(renderAuthPage('That username is already taken.'));
+          return;
+        }
+
+        const salt = randomUUID();
+        const passwordHash = hashPassword(password, salt);
+        dataStore.accounts[usernameInput] = { salt, passwordHash, income: [], expenses: [], recurringBills: [] };
+
+        if (sessionId && dataStore.sessions[sessionId]) {
+          delete dataStore.sessions[sessionId];
+        }
+
+        const newSessionId = randomUUID();
+        dataStore.sessions[newSessionId] = usernameInput;
+        saveData();
+        redirect('/', createSessionCookie(newSessionId));
+      }); return;
+    }
+
+    if (url.pathname === '/login') {
+      parseBody(req, p => {
+        const usernameInput = normalizeUsername(p.get('username'));
+        const password = String(p.get('password') || '');
+        const account = dataStore.accounts[usernameInput];
+
+        if (!account || !account.passwordHash || !verifyPassword(password, account.salt, account.passwordHash)) {
+          res.writeHead(200, withCookieHeaders({ "Content-Type": "text/html; charset=utf-8" }, setCookieHeader));
+          res.end(renderAuthPage('Invalid username or password.'));
+          return;
+        }
+
+        if (sessionId && dataStore.sessions[sessionId]) {
+          delete dataStore.sessions[sessionId];
+        }
+
+        const newSessionId = randomUUID();
+        dataStore.sessions[newSessionId] = usernameInput;
+        saveData();
+        redirect('/', createSessionCookie(newSessionId));
+      }); return;
+    }
+
+    if (url.pathname === '/logout') {
+      if (sessionId && dataStore.sessions[sessionId]) {
+        delete dataStore.sessions[sessionId];
+        saveData();
+      }
+      redirect('/', clearSessionCookie());
+      return;
+    }
+
+    if (!userData) {
+      redirect('/');
+      return;
+    }
+
     if (url.pathname === '/income') {
       parseBody(req, p => {
         const amount = Number(p.get('amount'));
         const category = p.get('category');
         const date = p.get('date') ? new Date(p.get('date')).toISOString() : new Date().toISOString();
-        if (!isNaN(amount) && category && new Date(date) >= cutoff) { income.push({amount, category, date}); saveData(); }
-        res.writeHead(302, {Location: '/'}); res.end();
+        if (!isNaN(amount) && category && new Date(date) >= cutoff) { userData.income.push({amount, category, date}); saveData(); }
+        redirect();
       }); return;
     }
     if (url.pathname === '/expense') {
@@ -618,8 +899,8 @@ const server = http.createServer((req, res) => {
         const amount = Number(p.get('amount'));
         const category = p.get('category');
         const date = p.get('date') ? new Date(p.get('date')).toISOString() : new Date().toISOString();
-        if (!isNaN(amount) && category && new Date(date) >= cutoff) { expenses.push({amount, category, date}); saveData(); }
-        res.writeHead(302, {Location: '/'}); res.end();
+        if (!isNaN(amount) && category && new Date(date) >= cutoff) { userData.expenses.push({amount, category, date}); saveData(); }
+        redirect();
       }); return;
     }
     if (url.pathname === '/recurring') {
@@ -629,29 +910,29 @@ const server = http.createServer((req, res) => {
         const frequency = p.get('frequency');
         const date = new Date(p.get('date')).toISOString();
         if (!isNaN(amount) && category && frequency && new Date(date) >= cutoff) {
-          recurringBills.push({ amount, category, frequency, date, lastPaid: null });
+          userData.recurringBills.push({ amount, category, frequency, date, lastPaid: null });
           saveData();
         }
-        res.writeHead(302, { Location: '/' }); res.end();
+        redirect();
       }); return;
     }
     if (url.pathname === '/pay-recurring') {
       parseBody(req, p => {
         const index = Number(p.get('index'));
-        const bill = recurringBills[index];
+        const bill = userData.recurringBills[index];
         if (bill) {
           const dateStr = new Date().toISOString();
-          if (new Date(dateStr) >= cutoff) { expenses.push({amount: bill.amount, category: bill.category, date: dateStr}); }
+          if (new Date(dateStr) >= cutoff) { userData.expenses.push({amount: bill.amount, category: bill.category, date: dateStr}); }
           bill.lastPaid = dateStr; saveData();
         }
-        res.writeHead(302, {Location: '/'}); res.end();
+        redirect();
       }); return;
     }
-    if (url.pathname === '/delete-income') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && income[index]) { income.splice(index,1); saveData(); } res.writeHead(302, {Location:'/'}); res.end(); }); return; }
-    if (url.pathname === '/delete-expense') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && expenses[index]) { expenses.splice(index,1); saveData(); } res.writeHead(302, {Location:'/'}); res.end(); }); return; }
-    if (url.pathname === '/delete-recurring') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && recurringBills[index]) { recurringBills.splice(index,1); saveData(); } res.writeHead(302, {Location:'/'}); res.end(); }); return; }
+    if (url.pathname === '/delete-income') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && userData.income[index]) { userData.income.splice(index,1); saveData(); } redirect(); }); return; }
+    if (url.pathname === '/delete-expense') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && userData.expenses[index]) { userData.expenses.splice(index,1); saveData(); } redirect(); }); return; }
+    if (url.pathname === '/delete-recurring') { parseBody(req, p => { const index = Number(p.get('index')); if (!isNaN(index) && userData.recurringBills[index]) { userData.recurringBills.splice(index,1); saveData(); } redirect(); }); return; }
 
-    res.writeHead(404); res.end('Not found');
+    res.writeHead(404, withCookieHeaders({}, setCookieHeader)); res.end('Not found');
   }
 });
 
