@@ -1,0 +1,33 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;padding:20px}
+.container{max-width:1200px;margin:0 auto}
+.header{background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,.1);margin-bottom:30px}
+.header h1{color:#333;font-size:32px;margin-bottom:15px}
+.date-display{color:#666;font-size:14px;margin-bottom:20px}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+.summary-card{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:20px;border-radius:8px;text-align:center}
+.summary-card.income{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
+.summary-card.expense{background:linear-gradient(135deg,#ee0979 0%,#ff6a00 100%)}
+.summary-card.net.negative{background:linear-gradient(135deg,#eb3349 0%,#f45c43 100%)}
+.summary-label{font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.summary-value{font-size:28px;font-weight:700}
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
+@media(max-width:768px){.main-grid{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,.1);padding:25px}
+.card h2{color:#333;font-size:20px;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.form-group{margin-bottom:15px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-row.full{grid-template-columns:1fr}
+label{display:block;font-size:12px;color:#666;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+input,select{width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:6px;font-size:14px;transition:all .3s ease}
+input:focus,select:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+button{width:100%;padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;text-transform:uppercase}
+button.delete{background:linear-gradient(135deg,#ee0979 0%,#ff6a00 100%);padding:6px 12px;font-size:12px;width:auto;margin-top:5px}
+.entries-list{display:flex;flex-direction:column;gap:10px}
+.entry-item{background:#f8f9fa;padding:15px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;border-left:4px solid #667eea;transition:all .3s ease}
+.entry-item.expense{border-left-color:#ee0979}.entry-item.recurring{border-left-color:#11998e}
+.entry-info{flex:1}.entry-date{font-size:12px;color:#999}.entry-category{font-weight:600;color:#333}.entry-amount{font-size:18px;font-weight:700;color:#667eea;margin-right:15px}
+.entry-item.expense .entry-amount{color:#ee0979}.entry-item.recurring .entry-amount{color:#11998e}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
+.chart-container{background:#fff;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,.1);padding:25px;position:relative;height:400px}
+.chart-wrapper{position:relative;height:320px}

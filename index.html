@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Budget Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💰 Budget Dashboard</h1>
+      <div class="date-display">Last 14 Months | Today: <span id="today"></span></div>
+      <div class="summary-grid">
+        <div class="summary-card income">
+          <div class="summary-label">Total Income</div>
+          <div class="summary-value" id="incomeTotal">$0.00</div>
+        </div>
+        <div class="summary-card expense">
+          <div class="summary-label">Total Expenses</div>
+          <div class="summary-value" id="expenseTotal">$0.00</div>
+        </div>
+        <div class="summary-card net" id="netCard">
+          <div class="summary-label">Net Balance</div>
+          <div class="summary-value" id="netVal">$0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <h2>➕ Add Income</h2>
+        <form id="incomeForm">
+          <div class="form-group"><label>Category</label><input name="category" required /></div>
+          <div class="form-row">
+            <div class="form-group"><label>Amount</label><input name="amount" type="number" step="0.01" required /></div>
+            <div class="form-group"><label>Date</label><input name="date" type="date" /></div>
+          </div>
+          <button type="submit">Add Income</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>➖ Add Expense</h2>
+        <form id="expenseForm">
+          <div class="form-group"><label>Category</label><input name="category" required /></div>
+          <div class="form-row">
+            <div class="form-group"><label>Amount</label><input name="amount" type="number" step="0.01" required /></div>
+            <div class="form-group"><label>Date</label><input name="date" type="date" /></div>
+          </div>
+          <button type="submit">Add Expense</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <h2>🔄 Add Recurring Bill</h2>
+        <form id="recurringForm">
+          <div class="form-group"><label>Category</label><input name="category" required /></div>
+          <div class="form-row">
+            <div class="form-group"><label>Amount</label><input name="amount" type="number" step="0.01" required /></div>
+            <div class="form-group"><label>Frequency</label>
+              <select name="frequency" required>
+                <option value="">Select Frequency</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group form-row full"><label>Start Date</label><input name="date" type="date" required /></div>
+          <button type="submit">Add Recurring Bill</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>📋 Recurring Bills</h2>
+        <div class="entries-list" id="recurringList"></div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-container">
+        <h3>📈 Income by Category</h3>
+        <div class="chart-wrapper"><canvas id="incomeChart"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <h3>📉 Expenses by Category</h3>
+        <div class="chart-wrapper"><canvas id="expenseChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <h2>💵 Recent Income (Last 14 Days)</h2>
+        <div class="entries-list" id="incomeRecent"></div>
+      </div>
+      <div class="card">
+        <h2>💸 Recent Expenses (Last 14 Days)</h2>
+        <div class="entries-list" id="expenseRecent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

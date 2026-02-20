@@ -1,15 +1,14 @@
-[README.md](https://github.com/user-attachments/files/25431007/README.md)
-# Budget App
+# Budget App (Static)
 
-Run the local budget server:
+This version is a static client-side app that runs in the browser and is suitable for GitHub Pages.
+
+To preview locally:
 
 ```bash
-cd "budget"
-npm install   # no deps required, optional
-npm start
-# open http://localhost:3000
+cd "budget-app"
+# open index.html in a browser (or use a simple static server)
+python -m http.server 8000
+# then open http://localhost:8000
 ```
 
-Notes:
-- The server uses ESM (`type: module` in package.json).
-- Data is stored in `data.json` inside the `budget` folder (this file is gitignored).
+Data is stored in `localStorage` in your browser under the key `budgetAppData_v1`.
