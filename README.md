@@ -17,4 +17,8 @@ This project is fully static and runs directly in the browser (no Node server, n
 
 ## Data Storage
 
-Data is stored in browser `localStorage` under the key `budgetAppData_v1`.
+Data is stored in browser `localStorage` with account support:
+
+- `budgetAccounts_v1` for account credentials + per-account budget data
+- `budgetSessionUser_v1` for current signed-in user
+- Legacy `budgetAppData_v1` is read once for first-account migration
