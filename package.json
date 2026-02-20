@@ -1,0 +1,14 @@
+{
+  "name": "budget-app",
+  "version": "1.0.0",
+  "description": "Simple Node.js budget dashboard server",
+  "type": "module",
+  "main": "budget-app-server.js",
+  "scripts": {
+    "start": "node budget-app-server.js",
+    "check": "node --check budget-app-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
