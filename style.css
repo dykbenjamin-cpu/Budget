@@ -10,6 +10,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .header h1{color:#333;font-size:32px;margin-bottom:15px}
 .date-display{color:#666;font-size:14px;margin-bottom:20px}
 .user-row{color:#555;font-size:14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.plan-badge{font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:#eef2ff;color:#4338ca}
+.plan-badge.pro{background:#ecfdf3;color:#067647}
+.plan-badge.free{background:#f2f4f7;color:#475467}
+.plan-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:#344054;background:#f8fafc;border:1px solid #e4e7ec;border-radius:999px;padding:4px 10px}
+.plan-toggle input{width:auto;padding:0;border:none;box-shadow:none}
+.plan-toggle input:disabled{cursor:not-allowed}
 .action-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 .action-row .small-btn{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)}
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
@@ -20,6 +26,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .summary-card.reserve{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)}
 .summary-card.net.negative{background:linear-gradient(135deg,#eb3349 0%,#f45c43 100%)}
 .summary-card.runway.negative{background:linear-gradient(135deg,#ef4444 0%,#f97316 100%)}
+.summary-card.locked{opacity:.75;filter:saturate(.85)}
 .summary-label{font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
 .summary-value{font-size:28px;font-weight:700}
 .report-preview{margin-top:18px;background:#f8f9fa;border:1px solid #e3e6f0;border-radius:8px;padding:12px;white-space:pre-line;color:#344054;font-size:13px;line-height:1.5}
@@ -36,6 +43,7 @@ input:focus,select:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px 
 button{width:100%;padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;text-transform:uppercase}
 button.delete{background:linear-gradient(135deg,#ee0979 0%,#ff6a00 100%);padding:6px 12px;font-size:12px;width:auto;margin-top:5px}
 button.small-btn{width:auto;padding:6px 10px;font-size:12px;text-transform:none}
+button:disabled{opacity:.6;cursor:not-allowed}
 .entries-list{display:flex;flex-direction:column;gap:10px}
 .entry-item{background:#f8f9fa;padding:15px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;border-left:4px solid #667eea;transition:all .3s ease}
 .entry-item.expense{border-left-color:#ee0979}.entry-item.recurring{border-left-color:#11998e}
@@ -45,3 +53,4 @@ button.small-btn{width:auto;padding:6px 10px;font-size:12px;text-transform:none}
 .chart-container{background:#fff;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,.1);padding:25px;position:relative;height:400px}
 .chart-wrapper{position:relative;height:320px}
 .empty-state{color:#98a2b3;font-size:14px;padding:10px 0}
+.gated{opacity:.75}

@@ -1,6 +1,8 @@
 const ACCOUNTS_KEY = 'budgetAccounts_v1';
 const SESSION_KEY = 'budgetSessionUser_v1';
 const LEGACY_KEY = 'budgetAppData_v1';
+const PLAN_MODE_KEY = 'budgetPlanMode_v1';
+const MASTER_TEST_USER = 'monkeybutt';
 
 let accounts = {};
 let activeUser = null;
@@ -26,6 +28,85 @@ function toCurrency(amount) {
 
 function normalizeUsername(raw) {
   return String(raw || '').trim().toLowerCase();
+}
+
+function getPlanMode() {
+  const mode = localStorage.getItem(PLAN_MODE_KEY);
+  return mode === 'pro' ? 'pro' : 'free';
+}
+
+function setPlanMode(mode) {
+  localStorage.setItem(PLAN_MODE_KEY, mode === 'pro' ? 'pro' : 'free');
+}
+
+function isMasterTestUser(username = activeUser) {
+  return normalizeUsername(username) === MASTER_TEST_USER;
+}
+
+function hasProAccess() {
+  if (!activeUser) return false;
+  return isMasterTestUser() || getPlanMode() === 'pro';
+}
+
+function updatePlanUI() {
+  const badge = document.getElementById('planBadge');
+  const toggle = document.getElementById('proModeToggle');
+  if (!badge || !toggle) return;
+
+  const isMaster = isMasterTestUser();
+  const isPro = hasProAccess();
+
+  badge.textContent = `Plan: ${isPro ? 'Pro' : 'Free'}`;
+  badge.classList.toggle('pro', isPro);
+  badge.classList.toggle('free', !isPro);
+
+  toggle.checked = isPro;
+  toggle.disabled = isMaster;
+  toggle.title = isMaster ? 'Master test account is always Pro' : 'Toggle Free/Pro for local testing';
+}
+
+function applyProGate() {
+  const isPro = hasProAccess();
+
+  const exportBtn = document.getElementById('exportCsvBtn');
+  const reportBtn = document.getElementById('monthlyReportBtn');
+  const targetForm = document.getElementById('targetForm');
+  const targetList = document.getElementById('targetList');
+  const runwayCard = document.getElementById('runwayCard');
+  const reserveCard = document.getElementById('reserveCard');
+  const reportPreview = document.getElementById('monthlyReportPreview');
+
+  if (exportBtn) {
+    exportBtn.disabled = !isPro;
+    exportBtn.title = isPro ? '' : 'Pro feature';
+  }
+
+  if (reportBtn) {
+    reportBtn.disabled = !isPro;
+    reportBtn.title = isPro ? '' : 'Pro feature';
+  }
+
+  if (targetForm) {
+    const fields = targetForm.querySelectorAll('input, button, select');
+    fields.forEach(field => {
+      field.disabled = !isPro;
+    });
+    targetForm.classList.toggle('gated', !isPro);
+  }
+
+  if (!isPro && targetList) {
+    targetList.innerHTML = '<div class="empty-state">Pro feature: monthly category targets</div>';
+  }
+
+  if (runwayCard) runwayCard.classList.toggle('locked', !isPro);
+  if (reserveCard) reserveCard.classList.toggle('locked', !isPro);
+
+  if (!isPro && reportPreview) {
+    reportPreview.style.display = 'none';
+    reportPreview.textContent = '';
+  }
+
+  return isPro;
 }
 
 function loadAccounts() {
@@ -281,6 +362,8 @@ function exportCsv() {
 }
 
 function renderTargetList() {
+  if (!hasProAccess()) return;
+
   const targetList = document.getElementById('targetList');
   if (!targetList) return;
 
@@ -430,10 +513,11 @@ function renderDashboard() {
   const runwayVal = document.getElementById('runwayVal');
   const runwayCard = document.getElementById('runwayCard');
   const safeRunway = Math.max(t.runwayMonths, 0);
-  runwayVal.textContent = Number.isFinite(t.runwayMonths) ? `${safeRunway.toFixed(1)} mo` : '∞';
-  runwayCard.classList.toggle('negative', Number.isFinite(t.runwayMonths) && t.runwayMonths < 1);
+  const proEnabled = hasProAccess();
+  runwayVal.textContent = proEnabled ? (Number.isFinite(t.runwayMonths) ? `${safeRunway.toFixed(1)} mo` : '∞') : 'Pro';
+  runwayCard.classList.toggle('negative', proEnabled && Number.isFinite(t.runwayMonths) && t.runwayMonths < 1);
 
-  document.getElementById('taxReserveVal').textContent = toCurrency(t.taxReserve);
+  document.getElementById('taxReserveVal').textContent = proEnabled ? toCurrency(t.taxReserve) : 'Pro';
 
   const recurringList = document.getElementById('recurringList');
   recurringList.innerHTML = '';
@@ -519,7 +603,9 @@ function renderDashboard() {
     expenseRecent.appendChild(row);
   });
 
-  renderTargetList();
+  updatePlanUI();
+  const canUseProFeatures = applyProGate();
+  if (canUseProFeatures) renderTargetList();
 
   drawChart('incomeChart', Object.keys(t.incByCat), Object.values(t.incByCat));
   drawChart('expenseChart', Object.keys(t.expByCat), Object.values(t.expByCat));
@@ -529,14 +615,26 @@ function bindActionButtons() {
   const exportBtn = document.getElementById('exportCsvBtn');
   const reportBtn = document.getElementById('monthlyReportBtn');
   const reportPreview = document.getElementById('monthlyReportPreview');
+  const proModeToggle = document.getElementById('proModeToggle');
+
+  proModeToggle.addEventListener('change', event => {
+    if (!activeUser) return;
+    if (isMasterTestUser()) {
+      event.target.checked = true;
+      return;
+    }
+
+    setPlanMode(event.target.checked ? 'pro' : 'free');
+    renderDashboard();
+  });
 
   exportBtn.addEventListener('click', () => {
-    if (!activeUser) return;
+    if (!activeUser || !hasProAccess()) return;
     exportCsv();
   });
 
   reportBtn.addEventListener('click', () => {
-    if (!activeUser || !reportPreview) return;
+    if (!activeUser || !reportPreview || !hasProAccess()) return;
     const report = buildMonthlyReport();
     reportPreview.style.display = 'block';
     reportPreview.textContent = report;
@@ -634,6 +732,8 @@ function bindBudgetForms() {
     }
 
     if (event.target.id === 'targetForm') {
+      if (!hasProAccess()) return;
+
       const amount = Number(formData.get('amount'));
       const category = String(formData.get('category') || '').trim();
       const month = String(formData.get('month') || '').trim();

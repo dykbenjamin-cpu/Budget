@@ -32,7 +32,15 @@
     <div class="header">
       <h1>💰 Budget Dashboard</h1>
       <div class="date-display">Last 14 Months | Today: <span id="today"></span></div>
-      <div class="user-row">Signed in as <strong id="currentUser"></strong> <button id="logoutBtn" type="button" class="small-btn">Logout</button></div>
+      <div class="user-row">
+        Signed in as <strong id="currentUser"></strong>
+        <span id="planBadge" class="plan-badge">Plan: Free</span>
+        <label class="plan-toggle" for="proModeToggle">
+          <input id="proModeToggle" type="checkbox" />
+          <span>Pro Mode (Testing)</span>
+        </label>
+        <button id="logoutBtn" type="button" class="small-btn">Logout</button>
+      </div>
       <div class="action-row">
         <button id="exportCsvBtn" type="button" class="small-btn">Export CSV</button>
         <button id="monthlyReportBtn" type="button" class="small-btn">Monthly Report</button>
